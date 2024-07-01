@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "mySourceBucket" {
-  bucket = "my-source-bucket-76sdf700"
+  bucket = "my-source-bucket-76sdf700-asd"
 }
 
 resource "aws_s3_bucket_ownership_controls" "bucketOwnerControls" {

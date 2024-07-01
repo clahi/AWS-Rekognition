@@ -1,5 +1,5 @@
-resource "aws_iam_role" "lambdaRole" {
-  name = "lambdaRole"
+resource "aws_iam_role" "lambdaRoleRekognition" {
+  name = "lambdaRoleRekognition"
   assume_role_policy = jsonencode({
     "Version" : "2012-10-17"
     "Statement" : [
@@ -18,8 +18,8 @@ resource "aws_iam_role" "lambdaRole" {
   })
 }
 
-resource "aws_iam_policy" "lambdaS3Policy" {
-  name = "lambdaS3Policy"
+resource "aws_iam_policy" "lambdaS3PolicyRekognition" {
+  name = "lambdaS3PolicyRekognition"
   policy = jsonencode({
     Version : "2012-10-17"
     Statement : [
@@ -35,9 +35,9 @@ resource "aws_iam_policy" "lambdaS3Policy" {
       {
         Effect : "Allow"
         Action : [
-          "s3:GetObject"
+          "s3:*"
         ]
-        Resource : "arn:aws:s3:::my-source-bucket-76sdf700/*"
+        Resource : "*"
       },
       {
         "Effect" : "Allow",
@@ -47,19 +47,19 @@ resource "aws_iam_policy" "lambdaS3Policy" {
         "Resource" : "*"
       },
       {
-        "Effect" : "Allow",
-        "Action" : [
-          "rekognition:*"
-        ],
-        "Resource" : "*"
+            "Effect": "Allow",
+            "Action": [
+                "rekognition:*"
+            ],
+            "Resource": "*"
       }
     ]
   })
 }
 
 resource "aws_iam_policy_attachment" "lambdaRolePolicyAttachment" {
-  policy_arn = aws_iam_policy.lambdaS3Policy.arn
-  roles      = [aws_iam_role.lambdaRole.name]
+  policy_arn = aws_iam_policy.lambdaS3PolicyRekognition.arn
+  roles      = [aws_iam_role.lambdaRoleRekognition.name]
   name       = "lambdaRolePolicyAttachment"
 }
 
@@ -69,26 +69,26 @@ data "archive_file" "lambdaFile" {
   output_path = "${path.module}/lambda.zip"
 }
 
-resource "aws_lambda_function" "autoSpeechRecog" {
-  role             = aws_iam_role.lambdaRole.arn
+resource "aws_lambda_function" "faceRekognition" {
+  role             = aws_iam_role.lambdaRoleRekognition.arn
   filename         = data.archive_file.lambdaFile.output_path
   source_code_hash = data.archive_file.lambdaFile.output_base64sha256
-  function_name    = "autoSpeechRecog"
+  function_name    = "faceRekognition"
   timeout          = 60
   runtime          = "python3.9"
   handler          = "lambda.lambda_handler"
 
-  # environment {
-  #   variables = {
-  #     DEST_BUCKET = aws_s3_bucket.myDestiBucket.id
-  #   }
-  # }
+  environment {
+    variables = {
+      TABLE_NAME = aws_dynamodb_table.basic-dynamodb-table.name
+    }
+  }
 }
 
-resource "aws_lambda_permission" "autoSpeechRecogPermission" {
+resource "aws_lambda_permission" "faceRekognitionPermission" {
   statement_id  = "AllowExecutionFromS3Bucket"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.autoSpeechRecog.function_name
+  function_name = aws_lambda_function.faceRekognition.function_name
   principal     = "s3.amazonaws.com"
   source_arn    = aws_s3_bucket.mySourceBucket.arn
 }
@@ -97,10 +97,9 @@ resource "aws_s3_bucket_notification" "bucketNotification" {
   bucket = aws_s3_bucket.mySourceBucket.id
 
   lambda_function {
-    lambda_function_arn = aws_lambda_function.autoSpeechRecog.arn
+    lambda_function_arn = aws_lambda_function.faceRekognition.arn
     events              = ["s3:ObjectCreated:*"]
-    filter_prefix       = "source/"
   }
 
-  depends_on = [aws_lambda_permission.autoSpeechRecogPermission]
+  depends_on = [aws_lambda_permission.faceRekognitionPermission]
 }
